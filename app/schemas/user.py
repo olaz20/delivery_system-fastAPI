@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-
+from uuid import UUID
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -8,4 +8,14 @@ class UserCreate(BaseModel):
     password: str
 
     class Config:
-       orm_mode = True
+       from_attributes = True
+
+class UserOut(BaseModel):
+    id: UUID
+    email: EmailStr
+    first_name: str
+    last_name: str
+    is_verified: bool
+
+    class Config:
+        from_attributes = True
