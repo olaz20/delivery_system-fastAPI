@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     email_port: str
     email_use_tls: bool
     email_use_ssl: bool
+    access_token_expire_minutes: int
+    refresh_token_expire_days: int
 
     secret_key: str
     class Config:
