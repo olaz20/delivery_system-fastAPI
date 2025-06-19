@@ -1,5 +1,15 @@
 from pydantic import BaseModel, EmailStr
 from uuid import UUID
+from enum import Enum
+
+
+
+class UserRole(str, Enum):
+    CUSTOMER = "customer"
+    ADMIN = "admin"
+    DISPATCHER = "dispatcher"
+
+
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -16,9 +26,22 @@ class UserOut(BaseModel):
     first_name: str
     last_name: str
     is_verified: bool
+    role: UserRole
+    staff_id: str | None
+
 
     class Config:
         from_attributes = True
+
+class StaffCreate(BaseModel):
+    email: EmailStr
+    first_name: str
+    last_name: str 
+    password: str
+    role: UserRole
+    staff_id: str
+    department: str
+
 
 class Token(BaseModel):
     access_token: str

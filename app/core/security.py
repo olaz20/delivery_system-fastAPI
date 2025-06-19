@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException, status
 from app.models.user import TokenBlackList, User
 from jose import jwt, JWTError
-from app.core.database import get_db
+from app.core import database
 from fastapi.security import OAuth2PasswordBearer
-
+from app.schemas.user import UserRole
 pwd_context = CryptContext(schemes=["bcrypt"],
 deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
@@ -36,7 +36,7 @@ def create_refresh_token(data: dict) -> str:
     to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, settings.secret_key, algorithm="HS256")
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(lambda: __import__("app.core.database").core.database.get_db)) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -87,3 +87,26 @@ def refresh_access_token(refresh_token: str, db: Session) -> dict:
     
     access_token = create_access_token({"sub": email})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+def initialize_default_admin(db: Session):
+    admin_email = settings.default_admin_email
+    if not db.query(User).filter(User.email == admin_email).first():
+        admin = User(
+            email=admin_email,
+            first_name ="Admin",
+            last_name = "Admin",
+            password=hash(settings.default.admin_password),
+            is_verified=True,
+            role=UserRole.ADMIN,
+            staff_id="ADM001"
+        )
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+    return None
+
+def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, details="Admin access requried")
+    return current_user

@@ -1,14 +1,14 @@
 from fastapi import HTTPException, status, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.models.user import User
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, StaffCreate
 from app.services.email import send_confirmation_email
 from app.core import security, database
-from app.models.user import User, TokenBlackList
+from app.models.user import User, TokenBlackList, UserRole
 from jose import jwt, JWTError
 from app.core.config import settings
 from app.schemas.user import Login, RefreshToken
-from app.core.security import create_access_token, create_refresh_token, verify, oauth2_scheme, refresh_access_token
+from app.core.security import create_access_token, create_refresh_token, verify, oauth2_scheme, refresh_access_token, get_current_admin
 
 
 async def send_verfication_email(email: str):
@@ -95,3 +95,27 @@ def logout_user_service(token: str = Depends(oauth2_scheme), db: Session = Depen
 def refresh_token_service(refresh_token: RefreshToken, db: Session = Depends(database.get_db)):
     token_data = refresh_access_token(refresh_token.refresh_token, db)
     return token_data
+
+def create_staff_service(staff: StaffCreate, db: Session = Depends(database.get_db), current_admin: User = Depends(get_current_admin)):
+    if db.query(User).filter(User.email == staff.email).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+    if db.query(User).filter(User.staff_id == staff.staff_id).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role for staff")
+    
+    if staff.role == UserRole.CUSTOMER:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role for staff")
+    
+    hashed_password = hash(staff.password)
+    db_user = User(
+        email = staff.email,
+        first_name = staff.first_name,
+        last_name = staff.last_name,
+        password= hashed_password,
+        is_verified=True,
+        role=staff.role,
+        staff_id=staff.staff_id
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user

@@ -16,8 +16,12 @@ class Settings(BaseSettings):
     email_use_ssl: bool
     access_token_expire_minutes: int
     refresh_token_expire_days: int
-
+ 
     secret_key: str
+
+    default_admin_email: str
+    admin_password: str
+
     class Config:
         env_file = ".env"
 settings = Settings()
