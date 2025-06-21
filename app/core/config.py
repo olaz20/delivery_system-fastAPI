@@ -21,6 +21,13 @@ class Settings(BaseSettings):
 
     default_admin_email: str
     admin_password: str
+    
+    upload_dir: str
+
+    base_price_per_km: float
+    weight_price_per_kg:float
+    demand_multiplier:float
+    gps_freshness_minutes:int
 
     class Config:
         env_file = ".env"

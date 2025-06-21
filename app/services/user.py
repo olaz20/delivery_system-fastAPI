@@ -2,7 +2,7 @@ from fastapi import HTTPException, status, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.schemas.user import UserCreate, StaffCreate
-from app.services.email import send_confirmation_email
+from app.services.email import      send_confirmation_email
 from app.core import security, database
 from app.models.user import User, TokenBlackList, UserRole
 from jose import jwt, JWTError

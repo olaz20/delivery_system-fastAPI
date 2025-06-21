@@ -46,7 +46,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     # Check if token is blacklisted
     if db.query(TokenBlackList).filter(TokenBlackList.token == token).first():
         raise credentials_exception
-    
+     
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
         email: str = payload.get("sub")
@@ -96,7 +96,7 @@ def initialize_default_admin(db: Session):
             email=admin_email,
             first_name ="Admin",
             last_name = "Admin",
-            password=hash(settings.default.admin_password),
+            password=hash(settings.admin_password),
             is_verified=True,
             role=UserRole.ADMIN,
             staff_id="ADM001"
@@ -109,4 +109,10 @@ def initialize_default_admin(db: Session):
 def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, details="Admin access requried")
+    return current_user
+
+
+def get_current_driver(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != UserRole.DRIVER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Driver access required")
     return current_user
