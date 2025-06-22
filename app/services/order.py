@@ -1,5 +1,5 @@
-from app.schemas.order import GeoPoint, OrderOut, OrderCreate, OrderFullOut
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from app.schemas.order import GeoPoint, OrderOut, OrderCreate, OrderFullOut, ProofOfDeliveryOut
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_driver, get_current_user
@@ -13,9 +13,11 @@ from geopy.distance import geodesic
 from pathlib import Path
 import shutil
 import uuid
+from app.core.response import create_success_response
+
 
 def update_driver_location_service(
-   location: GeoPoint, db: Session, current_driver: User
+   request: Request, location: GeoPoint, db: Session, current_driver: User
 ):
     db_location = db.query(DriverLocation).filter(DriverLocation.driver_id == current_driver.id).first()
     if db_location:
@@ -29,8 +31,11 @@ def update_driver_location_service(
         db.add(db_location)
     db.commit()
     db.refresh(db_location)
-    return {"detail": "Driver location updated successfully"}
-
+    return create_success_response(
+        data={"message": "Location updated successfully"},
+        message="Driver location updated.",
+        request_id=request.state.request_id
+    )
 
 
 
@@ -85,10 +90,11 @@ def calculate_price_service(pickup_location: dict, delivery_location: dict, pack
 
 
 async def create_order_service(
+    request: Request,
     order: OrderCreate,
     goods_image: UploadFile =File(None),
     db: Session = Depends(get_db), 
-    current_customer: User = Depends(get_current_user)
+    current_customer: User = Depends(get_current_user),
 ):
     if goods_image:
         allowed_extensions = {".jpg", ".jpeg", ".png"}
@@ -130,9 +136,17 @@ async def create_order_service(
     db.add(status_history)
     db.commit()
 
-    return db_order
+    return create_success_response(
+        data=OrderOut.from_orm(db_order),
+        message="Order created successfully.",
+        code=201,
+        request_id=request.state.request_id
+    )
 
-async def assign_driver_to_order_service(order_id: int, db:Session = Depends(get_db), current_dispatcher: User = Depends(get_current_driver)):
+
+
+
+async def assign_driver_to_order_service(request: Request,order_id: int, db:Session = Depends(get_db), current_dispatcher: User = Depends(get_current_driver)):
     db_order = db.query(Order).filter(Order.id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
@@ -153,12 +167,16 @@ async def assign_driver_to_order_service(order_id: int, db:Session = Depends(get
     )
     db.add(status_history)
     db.commit()
-    return db_order
+    return create_success_response(
+        data=OrderOut.from_orm(db_order),
+        message="Driver assigned successfully",
+        request_id=request.state.request_id
+    )
 
 
 
 
-def update_order_status_service(order_id: int, status: OrderOut, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_order_status_service(request: Request, order_id: int, status: OrderOut, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_order = db.query(Order).filter(Order.id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, details="Order not found")
@@ -191,10 +209,15 @@ def update_order_status_service(order_id: int, status: OrderOut, db: Session = D
     db.add(status_history)
     db.commit()
 
-    return db_order
+    return create_success_response(
+        data=OrderOut.from_orm(db_order),
+        message=f"Order status updated to {status}.",
+        request_id=request.state.request_id
+    )
 
 
 async def upload_proof_of_delivery_service(
+    request:Request,
     order_id: int,
     image: UploadFile = File(None),
     signature: UploadFile = File(None),
@@ -236,10 +259,14 @@ async def upload_proof_of_delivery_service(
     db.commit()
     db.refresh(db_proof)
     
-    return db_proof
+    return create_success_response(
+        data=ProofOfDeliveryOut.from_orm(db_proof),
+        message="Proof of delivery uploaded successfully.",
+        request_id=request.state.request_id
+    )
 
 
-def get_order_service(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_order_service(request: Request,order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_order = db.query(Order).filter(Order.id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
@@ -248,4 +275,8 @@ def get_order_service(order_id: int, db: Session = Depends(get_db), current_user
        current_user.id not in [db_order.customer_id, db_order.driver_id]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this order")
     
-    return db_order
+    return create_success_response(
+        data=OrderFullOut.from_orm(db_order),
+        message="Order retrieved successfully.",
+        request_id=request.state.request_id
+    )

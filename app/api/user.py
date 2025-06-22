@@ -1,5 +1,5 @@
-from fastapi import  status, Depends, APIRouter
-from app.schemas.user import  UserOut, UserCreate, Token, Login, RefreshToken, StaffCreate
+from fastapi import  status, Depends, APIRouter, Request
+from app.schemas.user import  UserOut, UserCreate, Token, Login, RefreshToken, StaffCreate, StandardResponse
 from sqlalchemy.orm import Session
 from app.core import database
 from app.services.user import create_user_service, verify_email_service, login_user_service, logout_user_service,refresh_token_service, create_staff_service
@@ -23,9 +23,9 @@ async def verify_email(token: str, db: Session = Depends(database.get_db)):
 
 
 
-@router.post("/login", response_model=Token)
-def login(user_credentials: Login, db:Session = Depends(database.get_db)):
-     return login_user_service(user_credentials, db)
+@router.post("/login", response_model=StandardResponse)
+def login(request: Request, user_credentials: Login, db:Session = Depends(database.get_db)):
+     return login_user_service(request, user_credentials, db)
 
 
 

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.api import user, order
 from fastapi.middleware.cors import CORSMiddleware
+from app.services.response import RequestIDMiddleware
 app = FastAPI(
 )
 
@@ -12,6 +13,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(RequestIDMiddleware)
 
 
 app.include_router(user.router)

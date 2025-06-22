@@ -1,6 +1,6 @@
 from app.core.database import get_db
 from app.core.security import get_current_driver, get_current_user
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 
 from app.schemas.user import UserRole
 from sqlalchemy.orm import Session
@@ -33,7 +33,8 @@ def update_location_route(
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=OrderOut)
-async def create_order_service(
+async def create_order(
+    request: Request,
     order: OrderCreate,
     goods_image: UploadFile =File(None),
     db: Session = Depends(get_db), 

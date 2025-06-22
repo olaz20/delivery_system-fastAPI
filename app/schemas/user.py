@@ -1,7 +1,8 @@
 from pydantic import BaseModel, EmailStr
 from uuid import UUID
 from enum import Enum
-
+from typing import Optional, Any
+from datetime import datetime
 
 
 class UserRole(str, Enum):
@@ -47,6 +48,18 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str
+
+class StandardResponse(BaseModel):
+    status: str
+    code: int
+    message: str
+    data: Token  # <- this wraps the token
+    request_id: UUID
+    errors: Optional[Any] = None
+    timestamp: datetime
+
+
+
 
 class Login(BaseModel):
     email: EmailStr
