@@ -12,6 +12,7 @@ from app.schemas.user import UserRole
 pwd_context = CryptContext(schemes=["bcrypt"],
 deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
+
 def hash(password: str):
     return pwd_context.hash(password)
 
@@ -36,7 +37,8 @@ def create_refresh_token(data: dict) -> str:
     to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, settings.secret_key, algorithm="HS256")
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(lambda: __import__("app.core.database").core.database.get_db)) -> User:
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(lambda: next(__import__("app.core.database").core.database.get_db()))) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -113,6 +115,6 @@ def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
 
 
 def get_current_driver(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != UserRole.DRIVER:
+    if current_user.role != UserRole.DISPATCHER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Driver access required")
     return current_user

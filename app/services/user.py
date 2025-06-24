@@ -8,7 +8,7 @@ from app.models.user import User, TokenBlackList, UserRole
 from jose import jwt, JWTError
 from app.core.config import settings
 from app.schemas.user import Login, RefreshToken
-from app.core.security import create_access_token, create_refresh_token, verify, oauth2_scheme, refresh_access_token, get_current_admin
+from app.core.security import create_access_token, create_refresh_token, verify, oauth2_scheme, refresh_access_token
 from app.core.response import  create_success_response
 
 async def send_verfication_email(email: str):
@@ -24,7 +24,7 @@ async def send_verfication_email(email: str):
 
 
 
-async def create_user_service(user: UserCreate, db: Session, request:Request):
+async def create_user_service(request:Request, user: UserCreate, db: Session, ):
     db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
         if db_user.is_verified:
@@ -55,7 +55,7 @@ async def create_user_service(user: UserCreate, db: Session, request:Request):
         code=201,
         request_id=request.state.request_id)
 
-async def verify_email_service(token: str, db: Session, request:Request):
+async def verify_email_service(request:Request, token: str, db: Session):
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
         email: str = payload.get("sub")
@@ -128,7 +128,7 @@ def create_staff_service(request: Request, staff: StaffCreate, db: Session, curr
     if staff.role == UserRole.CUSTOMER:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role for staff")
     
-    hashed_password = hash(staff.password)
+    hashed_password = security.hash(staff.password)
     db_user = User(
         email = staff.email,
         first_name = staff.first_name,

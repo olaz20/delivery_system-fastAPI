@@ -46,7 +46,7 @@ def assign_driver_service(db: Session, pickup_location: dict) -> User:
         Order.status.in_(["created", "assigned", "picked_up"])
     ).subquery()
     nearest_driver = db.query(User, DriverLocation.location).join(DriverLocation, User.id == DriverLocation.driver_id).filter(
-        User.role == UserRole.DRIVER,
+        User.role == UserRole.DISPATCHER,
         User.is_verified == True,
         DriverLocation.updated_at >= freshness_threshold,
         User.id.notin_(active_orders)
@@ -71,7 +71,7 @@ def assign_driver_service(db: Session, pickup_location: dict) -> User:
     
     return nearest_driver[0]
 
-def calculate_price_service(pickup_location: dict, delivery_location: dict, package_details: dict) -> float:
+async def calculate_price_service(pickup_location: dict, delivery_location: dict, package_details: dict) -> float:
     pickup_coords = (pickup_location["coordinates"][1], pickup_location["coordinates"][0])
     
     delivery_coords = (delivery_location["coordinates"][1], delivery_location["coordinates"][0])
@@ -103,7 +103,7 @@ async def create_order_service(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid image format. Use JPG, JPEG, or PNG")
         if goods_image.size > 5 * 1024 * 1024:  # 5MB limit
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image size exceeds 5MB")
-    price = await calculate_price_service(order.pickup_location.dict(), order.delivery_location.dict(), [item.dict() for item in order.goods])    
+    price = await calculate_price_service(order.pickup_location.dict(), order.delivery_location.dict(), order.package_details.dict())    
 
     goods_image_path = None
     if goods_image:
@@ -118,8 +118,8 @@ async def create_order_service(
         customer_id=current_customer.id,
         pickup_location=order.pickup_location.dict(),
         delivery_location=order.delivery_location.dict(),
-        package_details=[item.dict() for item in order.goods],
-        recipient_details=order.recipient.dict(),
+        package_details= order.package_details.dict(),
+        recipient_details=order.recipient_details.dict(),
         goods_image_path=str(goods_image_path) if goods_image_path else None,
         price=price,
         status=OrderStatus.CREATED
@@ -137,7 +137,7 @@ async def create_order_service(
     db.commit()
 
     return create_success_response(
-        data=OrderOut.from_orm(db_order),
+        data=OrderOut.model_validate(db_order, from_attributes=True),
         message="Order created successfully.",
         code=201,
         request_id=request.state.request_id

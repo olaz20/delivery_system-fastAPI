@@ -3,6 +3,8 @@ from typing import Dict, List, Optional
 from datetime import datetime
 from enum import Enum
 from .user import UserOut
+from uuid import UUID
+
 
 class OrderStatus(str, Enum):
     CREATED="created"
@@ -14,7 +16,7 @@ class OrderStatus(str, Enum):
 
 class GeoPoint(BaseModel):
     type: str = Field("Point", Literal=True)
-    coordinate: List[float]
+    coordinates: List[float]
 
 class PackageDetails(BaseModel):
     weight_kg:float
@@ -26,23 +28,22 @@ class RecipientDetails(BaseModel):
     phone: str  # e.g., "+1234567890"
 
 class OrderCreate(BaseModel):
-    pickup_loaction: GeoPoint
-    delivery_loaction: GeoPoint
+    pickup_location: GeoPoint
+    delivery_location: GeoPoint
     package_details: PackageDetails
     recipient_details: RecipientDetails
 
 class OrderOut(BaseModel):
-    id: int
+    id: UUID
     customer: UserOut
     driver: Optional[UserOut]
-    pickup_loaction: GeoPoint
+    pickup_location: GeoPoint
     delivery_location: GeoPoint
     package_details: PackageDetails
     price: float
     goods_image_path: Optional[str]
     status: OrderStatus
-    created_at: datetime
-    updated_at: datetime
+
 
     class Config:
         from_attributes = True

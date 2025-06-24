@@ -3,13 +3,12 @@ from uuid import UUID
 from enum import Enum
 from typing import Optional, Any
 from datetime import datetime
-
+from typing import Generic, TypeVar
 
 class UserRole(str, Enum):
     CUSTOMER = "customer"
     ADMIN = "admin"
     DISPATCHER = "dispatcher"
-
 
 
 class UserCreate(BaseModel):
@@ -44,16 +43,19 @@ class StaffCreate(BaseModel):
     department: str
 
 
+T = TypeVar("T")
+
+
 class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str
-
-class StandardResponse(BaseModel):
+    
+class StandardResponse(BaseModel, Generic[T]):
     status: str
     code: int
     message: str
-    data: Token  # <- this wraps the token
+    data: T 
     request_id: UUID
     errors: Optional[Any] = None
     timestamp: datetime
