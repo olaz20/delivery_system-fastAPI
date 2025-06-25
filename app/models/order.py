@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Enum, ForeignKey, JSON, DateTime, func
+from sqlalchemy import Column, Integer, String, Float, Enum, ForeignKey, JSON, DateTime, func, Boolean
 import enum
 from app.core.base import Base
 from sqlalchemy.dialects.postgresql import UUID
@@ -7,6 +7,9 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from app.models.common import Audit
 from uuid import uuid4
+
+
+
 
 class OrderStatus(str, enum.Enum):
     CREATED = "created"
@@ -21,6 +24,8 @@ class Order(Base, Audit):
     id = Column(UUID(as_uuid=True), primary_key=True, nullable=False, default=uuid.uuid4)
     customer_id=Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     driver_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    payment_id = Column(UUID(as_uuid=True), ForeignKey("payments.id"))
+    is_verified = Column(Boolean, default=False)
     pickup_location=Column(JSONB, nullable=False)
     recipient_details = Column(JSONB, nullable=False)
     package_details = Column(JSONB, nullable=False)
@@ -37,7 +42,7 @@ class Order(Base, Audit):
 class OrderStatusHistory(Base, Audit):
     __tablename__ = "order_status_history"
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid4)
-    order_id= Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False)
+    order_id= Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     status = Column(Enum(OrderStatus), nullable=False)
     changed_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     timestamp = Column(DateTime, default=func.now())
@@ -47,7 +52,7 @@ class OrderStatusHistory(Base, Audit):
 class ProofOfDelivery(Base, Audit):
     __tablename__ = "proof_of_delivery"
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    order_id=Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False, unique=True)
+    order_id=Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, unique=True)
     image_path = Column(String, nullable=True)
     signature_path=Column(String, nullable=True)
     uploaded_path=Column(DateTime, default=func.now())

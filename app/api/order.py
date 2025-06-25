@@ -65,6 +65,7 @@ def update_order_status_service(request: Request, order_id: int, status: OrderOu
 
 
 
+
 @router.post("/{order_id}/proof-of-delivery", response_model=ProofOfDeliveryOut)
 async def upload_proof_of_delivery(
     request: Request,

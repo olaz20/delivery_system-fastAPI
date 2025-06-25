@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     demand_multiplier:float
     gps_freshness_minutes:int
 
+    paystack_secret_key: str
+    frontend_url: str
+
     class Config:
         env_file = ".env"
 settings = Settings()

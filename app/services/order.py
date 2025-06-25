@@ -13,6 +13,7 @@ from geopy.distance import geodesic
 from pathlib import Path
 import shutil
 import uuid
+from app.models.payment import Payment
 from app.core.response import create_success_response
 
 
@@ -71,6 +72,8 @@ def assign_driver_service(db: Session, pickup_location: dict) -> User:
     
     return nearest_driver[0]
 
+
+
 async def calculate_price_service(pickup_location: dict, delivery_location: dict, package_details: dict) -> float:
     pickup_coords = (pickup_location["coordinates"][1], pickup_location["coordinates"][0])
     
@@ -88,14 +91,7 @@ async def calculate_price_service(pickup_location: dict, delivery_location: dict
 
 
 
-
-async def create_order_service(
-    request: Request,
-    order: OrderCreate,
-    goods_image: UploadFile =File(None),
-    db: Session = Depends(get_db), 
-    current_customer: User = Depends(get_current_user),
-):
+async def validate_image_file(goods_image: UploadFile=File(None)):
     if goods_image:
         allowed_extensions = {".jpg", ".jpeg", ".png"}
         file_extension = Path(goods_image.filename).suffix.lower()
@@ -103,10 +99,6 @@ async def create_order_service(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid image format. Use JPG, JPEG, or PNG")
         if goods_image.size > 5 * 1024 * 1024:  # 5MB limit
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image size exceeds 5MB")
-    price = await calculate_price_service(order.pickup_location.dict(), order.delivery_location.dict(), order.package_details.dict())    
-
-    goods_image_path = None
-    if goods_image:
         upload_dir = Path(settings.upload_dir)
         upload_dir.mkdir(exist_ok=True)
         file_extension = Path(goods_image.filename).suffix
@@ -114,6 +106,19 @@ async def create_order_service(
         with goods_image_path.open("wb") as buffer:
             shutil.copyfileobj(goods_image.file, buffer)
 
+
+async def create_order_service(
+    request: Request,
+    order: OrderCreate,
+    goods_image: UploadFile =File(None),
+    db: Session = Depends(get_db), 
+    current_customer: User = Depends(get_current_user),
+): 
+    price = await calculate_price_service(order.pickup_location.dict(), order.delivery_location.dict(), order.package_details.dict())    
+
+    goods_image_path = None
+    if goods_image:
+        await validate_image_file(goods_image)
     db_order = Order(
         customer_id=current_customer.id,
         pickup_location=order.pickup_location.dict(),
@@ -122,6 +127,7 @@ async def create_order_service(
         recipient_details=order.recipient_details.dict(),
         goods_image_path=str(goods_image_path) if goods_image_path else None,
         price=price,
+        is_verified=False,
         status=OrderStatus.CREATED
     )
     db.add(db_order)

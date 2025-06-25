@@ -37,13 +37,15 @@ class OrderOut(BaseModel):
     id: UUID
     customer: UserOut
     driver: Optional[UserOut]
+    payment_id: Optional[UUID]
     pickup_location: GeoPoint
     delivery_location: GeoPoint
     package_details: PackageDetails
     price: float
     goods_image_path: Optional[str]
     status: OrderStatus
-
+    is_verified: bool
+    driver_id: Optional[UUID]
 
     class Config:
         from_attributes = True
