@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from .common import Audit
 import uuid
 import enum
+from sqlalchemy.orm import relationship
 
 class UserRole(str, enum.Enum):
     CUSTOMER ="customer"
@@ -21,6 +22,7 @@ class User(Base, Audit):
     is_verified = Column(Boolean, default=False)
     role = Column(Enum(UserRole), default=UserRole.CUSTOMER, nullable=False)
     staff_id = Column(String, unique=True, nullable=True) # e.g STF001
+    payments = relationship("Payment", back_populates="customer")
     
     
 class TokenBlackList(Base, Audit):

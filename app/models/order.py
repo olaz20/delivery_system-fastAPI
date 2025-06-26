@@ -33,7 +33,9 @@ class Order(Base, Audit):
     delivery_location=Column(JSONB, nullable=False)
     price = Column(Float, nullable=False)
     status = Column(Enum(OrderStatus), default=OrderStatus.CREATED, nullable=False)
+    
 
+    payment = relationship("Payment", back_populates="orders", foreign_keys=[payment_id])
     customer = relationship("User", foreign_keys=[customer_id])
     driver = relationship("User", foreign_keys=[driver_id])
     status_history = relationship("OrderStatusHistory", back_populates="order")

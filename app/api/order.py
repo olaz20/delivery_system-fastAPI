@@ -51,14 +51,6 @@ async def create_order(
 
 
 
-
-
-@router.post("/{order_id}/assign", response_model=OrderOut)
-async def assign_driver_to_order(request: Request, order_id: int, db:Session = Depends(get_db), current_dispatcher: User = Depends(get_current_driver)):
-    return assign_driver_to_order_service(request, order_id, db,  current_dispatcher)
-
-
-
 @router.post("/{order_id}/update-status", response_model=OrderOut)
 def update_order_status_service(request: Request, order_id: int, status: OrderOut, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return update_order_status_service(request, order_id, status, db, current_user)

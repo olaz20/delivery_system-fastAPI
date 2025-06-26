@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api import user, order
+from app.api import user, order, payment
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.response import RequestIDMiddleware
 app = FastAPI(
@@ -19,6 +19,7 @@ app.add_middleware(RequestIDMiddleware)
 
 app.include_router(user.router)
 app.include_router(order.router)
+app.include_router(payment.router)
 
 @app.get("/")
 def root():

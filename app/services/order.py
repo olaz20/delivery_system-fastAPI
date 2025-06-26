@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_driver, get_current_user
 from app.models.user import User
+import json
 from app.models.order import Order, OrderStatus,OrderStatusHistory, ProofOfDelivery, DriverLocation        
 from sqlalchemy import func
+from sqlalchemy import cast, Text
 from app.core.config import settings
 from datetime import datetime, timedelta
 from app.schemas.user import UserRole
@@ -15,6 +17,7 @@ import shutil
 import uuid
 from app.models.payment import Payment
 from app.core.response import create_success_response
+from sqlalchemy import select
 
 
 def update_driver_location_service(
@@ -39,39 +42,46 @@ def update_driver_location_service(
     )
 
 
-
-def assign_driver_service(db: Session, pickup_location: dict) -> User:
+async def assign_driver_service(db: Session, pickup_location: dict) -> User:
     freshness_threshold = datetime.utcnow() - timedelta(minutes=settings.gps_freshness_minutes)
+    coords = pickup_location.get("coordinates", [])
+    if len(coords) != 2:
+        raise ValueError("pickup_location must contain 'coordinates' with [longitude, latitude]")
+    
+    pickup_point = {
+        "type": "Point",
+        "coordinates": coords
+    }
+    pickup_point_json = json.dumps(pickup_point)
+
 
     active_orders = db.query(Order.driver_id).filter(
         Order.status.in_(["created", "assigned", "picked_up"])
     ).subquery()
-    nearest_driver = db.query(User, DriverLocation.location).join(DriverLocation, User.id == DriverLocation.driver_id).filter(
-        User.role == UserRole.DISPATCHER,
-        User.is_verified == True,
-        DriverLocation.updated_at >= freshness_threshold,
-        User.id.notin_(active_orders)
-    ).order_by(
-        func.ST_Distance(
-            func.ST_SetSRID(
-                func.ST_GeomFromGeoJSON(DriverLocation.location),
-                4326
-            ),
-            func.ST_SetSRID(
-                func.ST_GeomFromGeoJSON(func.json_build_object(
-                    'type', 'Point',
-                    'coordinates', pickup_location['coordinates']
-                )),
-                4326
+
+    nearest_driver = (
+        db.query(User, DriverLocation.location)
+        .join(DriverLocation, User.id == DriverLocation.driver_id)
+        .filter(
+            User.role == UserRole.DISPATCHER,
+            User.is_verified == True,
+            DriverLocation.updated_at >= freshness_threshold,
+            User.id.notin_(select(active_orders.c.driver_id))
+        )
+        .order_by(
+            func.ST_Distance(
+                func.ST_SetSRID(func.ST_GeomFromGeoJSON(cast(DriverLocation.location, Text)), 4326),
+                func.ST_SetSRID(func.ST_GeomFromGeoJSON(cast(pickup_point_json, Text)), 4326)
             )
         )
-    ).first()
+        .limit(1)
+        .first()
+    )
 
     if not nearest_driver:
         return None
-    
-    return nearest_driver[0]
 
+    return nearest_driver[0]
 
 
 async def calculate_price_service(pickup_location: dict, delivery_location: dict, package_details: dict) -> float:
