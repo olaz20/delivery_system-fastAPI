@@ -9,7 +9,7 @@ from app.models.user import User
 import json
 from app.core.config import settings
 from app.schemas.user import StandardResponse
-
+from uuid import UUID
 from app.schemas.order import GeoPoint, OrderOut, OrderCreate, OrderFullOut, ProofOfDeliveryOut
 from app.services.order import update_driver_location_service, create_order_service, assign_driver_to_order_service,upload_proof_of_delivery_service, get_order_service
 
@@ -74,4 +74,18 @@ async def upload_proof_of_delivery(
 @router.get("/{order_id}", response_model=OrderFullOut)
 def get_order(request: Request, order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return get_order_service(request, order_id, db, current_user)
-    
+
+
+@router.post("/{order_id}/assign-driver", response_model=StandardResponse, status_code=status.HTTP_200_OK)
+async def assign_driver_to_order_endpoint(
+    order_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_dispatcher: User = Depends(get_current_driver)
+):
+    return await assign_driver_to_order_service(
+        request=request,
+        order_id=order_id,
+        db=db,
+        current_dispatcher=current_dispatcher
+    )

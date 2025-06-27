@@ -56,7 +56,7 @@ async def assign_driver_service(db: Session, pickup_location: dict) -> User:
 
 
     active_orders = db.query(Order.driver_id).filter(
-        Order.status.in_(["created", "assigned", "picked_up"])
+    Order.status.in_(["created", "assigned", "picked_up"])
     ).subquery()
 
     nearest_driver = (
@@ -66,7 +66,7 @@ async def assign_driver_service(db: Session, pickup_location: dict) -> User:
             User.role == UserRole.DISPATCHER,
             User.is_verified == True,
             DriverLocation.updated_at >= freshness_threshold,
-            User.id.notin_(select(active_orders.c.driver_id))
+           # User.id.notin_(select(active_orders.c.driver_id))
         )
         .order_by(
             func.ST_Distance(

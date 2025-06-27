@@ -40,14 +40,24 @@ async def initialize_payment_service(request: Request,  order_id: UUID,  db: Ses
         "reference": f"order_{uuid.uuid4()}",
         "callback_url": f"{settings.frontend_url}/payment/callback"
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://api.paystack.co/transaction/initialize",
-            json=payment_data,
-            headers=PAYSTACK_HEADERS
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                "https://api.paystack.co/transaction/initialize",
+                json=payment_data,
+                headers=PAYSTACK_HEADERS
+            )
+    except httpx.ConnectTimeout:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Paystack timed out. Please try again later."
         )
-    if response.status_code != 200:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to initialize payment")
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error connecting to Paystack: {str(exc)}"
+        )
+
     
     payment_response = response.json()
     if not payment_response.get("status"):

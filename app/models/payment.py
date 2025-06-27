@@ -15,7 +15,7 @@ class Payment(Base, Audit):
     amount = Column(Float)
     status = Column(String, default="pending")
     customer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"))
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"))
     
     customer = relationship("User", back_populates="payments")
     orders = relationship("Order", back_populates="payment", foreign_keys="Order.payment_id")
