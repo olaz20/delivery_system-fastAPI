@@ -25,11 +25,11 @@ async def initialize_payment(
 @router.post("/verify-payment", status_code=status.HTTP_200_OK)
 async def verify_payment(
     request: Request,
-    reference: str,
     background_tasks:BackgroundTasks,
+    reference: str,
     db: Session = Depends(get_db),
     current_customer: User = Depends(get_current_user)
 ):
-    return await verify_payment_service(request, reference, background_tasks,db,current_customer)
+    return await verify_payment_service(request,background_tasks, reference, db,current_customer)
     
 

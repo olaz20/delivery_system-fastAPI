@@ -1,0 +1,37 @@
+<!DOCTYPE html>>
+<html>
+    <head>
+    <style>
+        boby {
+            font-family:  Arial, sans-serif ;
+        }
+        .container {
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .content {
+           background-color: white;
+           padding: 20px;
+           border-radius: 5px;
+        .footer {
+           margin-top: 20px;
+           font-size: 12px;
+           color: #888;
+        }
+    }
+    </style>
+    </head>
+    <body>
+    <div class="container">
+        <div class="content">
+        <h2>Order Confirmation</h2>
+        <p>Hi {{ customer_name }},</p>
+        <p>Your order with ID <strong>{{ order_id }}</strong> has been created successfully.</p>
+        <p>We will notify you once it's assigned to a driver.</p>
+        </div>
+        <div class="footer">
+        <p>Thank you for choosing us.</p>
+        </div>
+    </div>
+</body>
+</html>

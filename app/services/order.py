@@ -1,124 +1,25 @@
 from app.schemas.order import GeoPoint, OrderOut, OrderCreate, OrderFullOut, ProofOfDeliveryOut
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,Request
+from fastapi import Depends, HTTPException, status, UploadFile, File,Request,BackgroundTasks
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_driver, get_current_user
 from app.models.user import User
-import json
-from app.models.order import Order, OrderStatus,OrderStatusHistory, ProofOfDelivery, DriverLocation        
-from sqlalchemy import func
-from sqlalchemy import cast, Text
+from app.models.order import Order, OrderStatus,OrderStatusHistory, ProofOfDelivery
 from app.core.config import settings
-from datetime import datetime, timedelta
 from app.schemas.user import UserRole
-from geopy.distance import geodesic
 from pathlib import Path
 import shutil
 import uuid
-from app.models.payment import Payment
 from app.core.response import create_success_response
-from sqlalchemy import select
+from app.services.utils import validate_image_file
+from app.services.payment import calculate_price_service
+from app.services.email import send_order_confirmation_email
 
-
-def update_driver_location_service(
-   request: Request, location: GeoPoint, db: Session, current_driver: User
-):
-    db_location = db.query(DriverLocation).filter(DriverLocation.driver_id == current_driver.id).first()
-    if db_location:
-        db_location.location = location.dict()
-        db_location.updated_at = func.now()
-    else:
-        db_location = DriverLocation(
-            driver_id = current_driver.id,
-            location=location.dict()
-        )
-        db.add(db_location)
-    db.commit()
-    db.refresh(db_location)
-    return create_success_response(
-        data={"message": "Location updated successfully"},
-        message="Driver location updated.",
-        request_id=request.state.request_id
-    )
-
-
-async def assign_driver_service(db: Session, pickup_location: dict) -> User:
-    freshness_threshold = datetime.utcnow() - timedelta(minutes=settings.gps_freshness_minutes)
-    coords = pickup_location.get("coordinates", [])
-    if len(coords) != 2:
-        raise ValueError("pickup_location must contain 'coordinates' with [longitude, latitude]")
-    
-    pickup_point = {
-        "type": "Point",
-        "coordinates": coords
-    }
-    pickup_point_json = json.dumps(pickup_point)
-
-
-    active_orders = db.query(Order.driver_id).filter(
-    Order.status.in_(["created", "assigned", "picked_up"])
-    ).subquery()
-
-    nearest_driver = (
-        db.query(User, DriverLocation.location)
-        .join(DriverLocation, User.id == DriverLocation.driver_id)
-        .filter(
-            User.role == UserRole.DISPATCHER,
-            User.is_verified == True,
-            DriverLocation.updated_at >= freshness_threshold,
-           # User.id.notin_(select(active_orders.c.driver_id))
-        )
-        .order_by(
-            func.ST_Distance(
-                func.ST_SetSRID(func.ST_GeomFromGeoJSON(cast(DriverLocation.location, Text)), 4326),
-                func.ST_SetSRID(func.ST_GeomFromGeoJSON(cast(pickup_point_json, Text)), 4326)
-            )
-        )
-        .limit(1)
-        .first()
-    )
-
-    if not nearest_driver:
-        return None
-
-    return nearest_driver[0]
-
-
-async def calculate_price_service(pickup_location: dict, delivery_location: dict, package_details: dict) -> float:
-    pickup_coords = (pickup_location["coordinates"][1], pickup_location["coordinates"][0])
-    
-    delivery_coords = (delivery_location["coordinates"][1], delivery_location["coordinates"][0])
-     
-    distance_km = geodesic(pickup_coords, delivery_coords).km
-
-    base_price = distance_km * settings.base_price_per_km
-
-    weight_price = package_details["weight_kg"] * settings.weight_price_per_kg
-
-    demand_price = (base_price + weight_price) * settings.demand_multiplier
-
-    return round(demand_price, 2)
-
-
-
-async def validate_image_file(goods_image: UploadFile=File(None)):
-    if goods_image:
-        allowed_extensions = {".jpg", ".jpeg", ".png"}
-        file_extension = Path(goods_image.filename).suffix.lower()
-        if file_extension not in allowed_extensions:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid image format. Use JPG, JPEG, or PNG")
-        if goods_image.size > 5 * 1024 * 1024:  # 5MB limit
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image size exceeds 5MB")
-        upload_dir = Path(settings.upload_dir)
-        upload_dir.mkdir(exist_ok=True)
-        file_extension = Path(goods_image.filename).suffix
-        goods_image_path = upload_dir / f"goods_{uuid.uuid4()}{file_extension}"
-        with goods_image_path.open("wb") as buffer:
-            shutil.copyfileobj(goods_image.file, buffer)
 
 
 async def create_order_service(
     request: Request,
+    background_tasks: BackgroundTasks,
     order: OrderCreate,
     goods_image: UploadFile =File(None),
     db: Session = Depends(get_db), 
@@ -152,40 +53,18 @@ async def create_order_service(
     db.add(status_history)
     db.commit()
 
+    background_tasks.add_task(
+        send_order_confirmation_email,
+        email=current_customer.email,
+        customer_name=current_customer.first_name,
+        order_id=str(db_order.id)
+
+    )
+
     return create_success_response(
         data=OrderOut.model_validate(db_order, from_attributes=True),
         message="Order created successfully.",
         code=201,
-        request_id=request.state.request_id
-    )
-
-
-
-
-async def assign_driver_to_order_service(request: Request,order_id: int, db:Session = Depends(get_db), current_dispatcher: User = Depends(get_current_driver)):
-    db_order = db.query(Order).filter(Order.id == order_id).first()
-    if not db_order:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
-    if db_order.status != OrderStatus.CREATED:
-       raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order not in created status") 
-    driver = await assign_driver_service(db, db_order.pickup_location)
-    if not driver:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No available drivers")
-    
-    db_order.driver_id = driver.id
-    db_order.status = OrderStatus.ASSIGNED
-    db.commit()
-    db.refresh(db_order)
-    status_history = OrderStatusHistory(
-        order_id=db_order.id,
-        status=OrderStatus.ASSIGNED,
-        changed_by_id=current_dispatcher.id
-    )
-    db.add(status_history)
-    db.commit()
-    return create_success_response(
-        data=OrderOut.from_orm(db_order),
-        message="Driver assigned successfully",
         request_id=request.state.request_id
     )
 
@@ -230,6 +109,9 @@ def update_order_status_service(request: Request, order_id: int, status: OrderOu
         message=f"Order status updated to {status}.",
         request_id=request.state.request_id
     )
+
+
+
 
 
 async def upload_proof_of_delivery_service(
@@ -280,6 +162,8 @@ async def upload_proof_of_delivery_service(
         message="Proof of delivery uploaded successfully.",
         request_id=request.state.request_id
     )
+
+
 
 
 def get_order_service(request: Request,order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

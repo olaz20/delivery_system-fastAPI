@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        <h2>
+            Payment Successfully
+        </h2>
+        <p>Hello {{ customer_name }}</p>
+        <p>We have received your payment for order ID <strong> {{ order_id }}</strong></p>
+        <p> Your order has been verified and is being processed.</p>
+        {% if driver_assigned %}
+        <p> Your assigned driver is <strong> {{ driver_name }} </strong> ({{ driver_email }}).</p>
+        {% else %}
+        <p>We are currently assigning a driver to your order. You'll be notified shortly.</p>
+        {% endif %}
+        <p>Thank you for using our service!</p>
+    </body>
+</html>

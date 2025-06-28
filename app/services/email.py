@@ -3,7 +3,7 @@ import os
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from app.core.config import settings
 from jinja2 import Environment, FileSystemLoader
-
+from fastapi import BackgroundTasks
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +29,50 @@ async def send_confirmation_email(email: str, token: str):
     html_content = template.render(verification_url=verification_url)
     message = MessageSchema(
         subject="Email Verification",
+        recipients=[email],
+        body=html_content,
+        subtype="html"
+    )
+    fm = FastMail(conf)
+    await fm.send_message(message)
+
+async def send_order_confirmation_email(email: str, customer_name: str, order_id: str):
+    template = env.get_template("order_verification.html")
+    html_content = template.render(customer_name=customer_name, order_id=order_id)
+
+    message = MessageSchema(
+        subject="Order Confirmation",
+        recipients=[email],
+        body=html_content,
+        subtype="html"
+    )
+    fm = FastMail(conf)
+    await fm.send_message(message)
+
+
+async def send_payment_success_email(email: str, customer_name: str, order_id: str, driver_name: str = None, driver_email: str = None):
+    template = env.get_template("payment_verification.html")
+    html_content = template.render(
+        customer_name=customer_name,
+        order_id=order_id,
+        driver_name=driver_name,
+        driver_email=driver_email,
+        driver_assigned=bool(driver_name and driver_email)
+    )
+    message = MessageSchema(
+        subject="Payment Received - Order Confirmed",
+        recipients=[email],
+        body=html_content,
+        subtype="html"
+    )
+    fm = FastMail(conf)
+    await fm.send_message(message)
+
+async def send_driver_assignment_email(email: str, driver_name: str, order_id: str):
+    template = env.get_template("driver_assignment.html")
+    html_content = template.render(driver_name=driver_name, order_id=order_id)
+    message = MessageSchema(
+        subject="New Order Assignment",
         recipients=[email],
         body=html_content,
         subtype="html"

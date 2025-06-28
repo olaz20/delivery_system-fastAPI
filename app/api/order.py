@@ -1,18 +1,14 @@
 from app.core.database import get_db
 from app.core.security import get_current_driver, get_current_user
-from fastapi import APIRouter, Depends, status, UploadFile, File, Request, Form, HTTPException
-
-from app.schemas.user import UserRole
+from fastapi import APIRouter, Depends, status, UploadFile, File, Request, Form, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from app.models.user import User
 import json
-from app.core.config import settings
 from app.schemas.user import StandardResponse
 from uuid import UUID
 from app.schemas.order import GeoPoint, OrderOut, OrderCreate, OrderFullOut, ProofOfDeliveryOut
-from app.services.order import update_driver_location_service, create_order_service, assign_driver_to_order_service,upload_proof_of_delivery_service, get_order_service
-
+from app.services.order import create_order_service, upload_proof_of_delivery_service, get_order_service
+from app.services.logistics import assign_driver_to_order_service, update_driver_location_service
 
 router = APIRouter(
     prefix="/order",
@@ -36,9 +32,11 @@ def update_location_route(
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=StandardResponse[OrderOut])
 async def create_order(
     request: Request,
+    background_tasks: BackgroundTasks,
     order: str = Form(...), 
     goods_image: UploadFile =File(None),
     db: Session = Depends(get_db), 
+
     current_customer: User = Depends(get_current_user)
 ):
     try:
@@ -47,7 +45,7 @@ async def create_order(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid order payload: {e}")
     
-    return await create_order_service(request, order_data, goods_image, db, current_customer)
+    return await create_order_service(request,background_tasks, order_data, goods_image, db, current_customer)
 
 
 

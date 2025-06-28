@@ -13,10 +13,10 @@ from app.schemas.order import OrderCreate
 import uuid
 from sqlalchemy.dialects.postgresql import UUID
 from app.models.order import Order, OrderStatus, OrderStatusHistory
-from app.services.order import assign_driver_service
+from app.services.logistics import assign_driver_service , retry_assign_driver
 from app.core.config import settings
-from sqlalchemy import func
-
+from geopy.distance import geodesic
+from app.services.email import send_driver_assignment_email, send_payment_success_email
 
 
 
@@ -26,6 +26,20 @@ PAYSTACK_HEADERS = {
     "Content-Type": "application/json"
 }
 
+async def calculate_price_service(pickup_location: dict, delivery_location: dict, package_details: dict) -> float:
+    pickup_coords = (pickup_location["coordinates"][1], pickup_location["coordinates"][0])
+    
+    delivery_coords = (delivery_location["coordinates"][1], delivery_location["coordinates"][0])
+     
+    distance_km = geodesic(pickup_coords, delivery_coords).km
+
+    base_price = distance_km * settings.base_price_per_km
+
+    weight_price = package_details["weight_kg"] * settings.weight_price_per_kg
+
+    demand_price = (base_price + weight_price) * settings.demand_multiplier
+
+    return round(demand_price, 2)
 
 
 async def initialize_payment_service(request: Request,  order_id: UUID,  db: Session, current_customer: User,) -> dict:
@@ -89,45 +103,10 @@ async def initialize_payment_service(request: Request,  order_id: UUID,  db: Ses
 
 
 
-
-async def retry_assign_driver(db: Session, order_id: UUID, retry_count: int, max_retries: int = 12):
-    """Retry assigning a driver every 5 minutes, up to 1 hour (12 retries)."""
-    db_order = db.query(Order).filter(Order.id == order_id).first()
-    if not db_order or db_order.status != OrderStatus.CREATED:
-        return
-    driver = await assign_driver_service(db, db_order.pickup_location)
-    if driver:
-        db_order.driver_id = driver.id
-        db_order.status = OrderStatus.ASSIGNED
-        status_history = OrderStatusHistory(
-            order_id=order_id,
-            status=OrderStatus.ASSIGNED,
-            changed_by_id=db_order.driver_id,
-        )
-        db.add(status_history)
-        db.commit()
-        return
-    if retry_count >= max_retries:
-        db_order.status = OrderStatus.FAILED
-        status_history = OrderStatusHistory(
-            id=uuid.uuid4(),
-            order_id=order_id,
-            status=OrderStatus.FAILED,
-            changed_by_id=None,
-        )  
-        db.add(status_history)
-        db.commit()
-        return 
-    from time import sleep
-    sleep(300)
-    await retry_assign_driver(db, order_id, retry_count +1, max_retries)
-
-
-
 async def verify_payment_service(
     request: Request,
-    reference: str,
     background_tasks: BackgroundTasks,
+    reference: str,
     db: Session = Depends(get_db),
     current_customer: User = Depends(get_current_user)
 ):
@@ -161,6 +140,7 @@ async def verify_payment_service(
 
 
         driver = await assign_driver_service(db, db_order.pickup_location)
+        driver_name, driver_email = None, None
         if driver:
             db_order.driver_id = driver.id
             db_order.status = OrderStatus.ASSIGNED
@@ -171,8 +151,26 @@ async def verify_payment_service(
             )
             db.add(status_history)
             db.commit()
+            
+            driver_name = driver.first_name
+            driver_email = driver.email
+            background_tasks.add_task(
+                send_driver_assignment_email,
+                email=driver_email,
+                driver_name=driver_name,
+                order_id=str(db_order.id)
+            )
+
         else:
             background_tasks.add_task(retry_assign_driver, db, db_order.id, 1)
+        background_tasks.add_task(
+            send_payment_success_email,
+            email=current_customer.email,
+            customer_name=current_customer.first_name,
+            order_id=str(db_order.id),
+            driver_name=driver_name,
+            driver_email=driver_email
+        )
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment not successful")
     return create_success_response(
